@@ -1,0 +1,85 @@
+```groovy
+pipeline {
+    agent any
+
+    environment {
+        NODEJS_HOME = tool name: 'NodeJS'
+        PATH = "${NODEJS_HOME}/bin:${env.PATH}"
+    }
+
+    stages {
+        stage('Setup Environment') {
+            steps {
+                script {
+                    // Install Maven, Node.js, Ansible, Terraform
+                    sh '''
+                    sudo apt-get update
+                    sudo apt-get install maven -y
+                    sudo apt-get install nodejs npm -y
+                    sudo apt-get install ansible -y
+                    sudo apt-get install -y wget unzip
+                    wget https://releases.hashicorp.com/terraform/1.0.0/terraform_1.0.0_linux_amd64.zip
+                    unzip terraform_1.0.0_linux_amd64.zip
+                    sudo mv terraform /usr/local/bin/
+                    '''
+                }
+            }
+        }
+
+        stage('Build Code - Java') {
+            steps {
+                script {
+                    // Build Java code with Maven
+                    sh 'mvn clean install'
+                }
+            }
+        }
+
+        stage('Build Code - Node.js') {
+            steps {
+                script {
+                    // Build Node.js code
+                    sh 'npm install'
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        stage('Provision Infrastructure') {
+            steps {
+                script {
+                    // Provision infrastructure using Terraform
+                    dir('terraform') {
+                        sh '''
+                        terraform init
+                        terraform apply -auto-approve
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Configuration Management') {
+            steps {
+                script {
+                    // Run Ansible playbook
+                    ansiblePlaybook(
+                        inventory: 'ansible/inventory.ini',
+                        playbook: 'ansible/playbook.yml'
+                    )
+                }
+            }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                script {
+                    // Build and deploy Docker containers
+                    sh 'docker build -t myapp .'
+                    sh 'docker run -d -p 80:80 myapp'
+                }
+            }
+        }
+    }
+}
+```
